@@ -1,4 +1,5 @@
 import { _decorator, Component, instantiate, Node, Prefab, tween, UIOpacity, Vec3 } from 'cc';
+import { UIController } from './UIController';
 const { ccclass, property } = _decorator;
 
 @ccclass('GameController')
@@ -24,10 +25,16 @@ export class GameController extends Component {
     @property(Prefab)
     smokeParticle: Prefab = null;
 
+    private uiController: UIController = null;
+
+    protected onLoad(): void {
+        this.uiController = this.node.getComponent(UIController);
+    }
+
     start(): void {
         this.startFadeAnimations();
         this.startVibrationEffect();
-        this.startDepartingUpEffect();
+        this.uiController.rocketLaunch();
     }
 
     fadeInOut(node: Node, duration: number): void {
@@ -59,7 +66,7 @@ export class GameController extends Component {
         ///////////////////////////////////////////////////////////////////////////////////////////
     }
 
-    vibrate(node: Node, intensity: number, duration: number): void {
+    vibrateRocket(node: Node, intensity: number, duration: number): void {
         if (!node) {
             console.error("Node is not initialized.");
             return;
@@ -87,13 +94,13 @@ export class GameController extends Component {
     startVibrationEffect(): void {
         if (this.rocket) {
             console.log("Rocket node is initialized:", this.rocket.name);
-            this.vibrate(this.rocket, 0.2, 0.1); // Adjust intensity and duration as needed
+            this.vibrateRocket(this.rocket, 0.2, 0.1); // Adjust intensity and duration as needed
         } else {
             console.error("Rocket node is not initialized.");
         }
     }
 
-    startDepartingUpEffect() {
+    startDepartingUp() {
         const departureOffset = 500; // Set how far up the UFO should move
         const initialPosition = this.rocketParent.getPosition();
         const targetPosition = new Vec3(initialPosition.x, initialPosition.y + departureOffset, initialPosition.z);
