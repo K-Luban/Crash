@@ -1,134 +1,221 @@
-import { _decorator, Component, instantiate, Node, Prefab, tween, UIOpacity, Vec3 } from 'cc';
-import { UIController } from './UIController';
+import { _decorator, Component, instantiate, Node, Prefab, tween, UIOpacity, Vec3, EventTarget, systemEvent } from 'cc';
+import { UIController, countdownEventTarget } from './UIController';
+import { Rocket, rocketEventTarget } from './Model/Rocket';
+import { GameStage } from './GameStages';
+import { redeemEventTarget, betAmountEventTarget } from './BetButtonControl';
+
 const { ccclass, property } = _decorator;
+
+const gameStageEventTarget = new EventTarget();
 
 @ccclass('GameController')
 export class GameController extends Component {
-    @property(Node)
-    rocket: Node = null;
-
-    @property(Node)
-    light1: Node = null;
-
-    @property(Node)
-    light2: Node = null;
-
-    @property(Node)
-    flare: Node = null;
 
     @property(Node)
     rocketParent: Node = null;
 
-    @property(Node)
-    particleParent: Node = null;
+    rocket: Rocket = null;
 
-    @property(Prefab)
-    smokeParticle: Prefab = null;
+    private _winningNum: number = 0;
+
+    public currentStage: GameStage = GameStage.INITIALIZING;
 
     private uiController: UIController = null;
 
+    private _winningNumbers: number[] = [];
+
+    private _betAmount: number = 0;
+
+    private _userWallet: number = 10000;
+
+    private userRedeemAmount: number = 0;
+
     protected onLoad(): void {
+        rocketEventTarget.on('isLaunchingChanged', this.onIsLaunchingChanged, this);
+        rocketEventTarget.on('isDepartingChanged', this.onIsDepartingChanged, this);
+        countdownEventTarget.on('countdownIsOne', this.onCountdownIsOne, this);
+        countdownEventTarget.on('Exploded', this.onExploded, this);
+        rocketEventTarget.on('departingFinished', this.onDepartingFinished, this);
+        rocketEventTarget.on('isFlying', this.onIsFlying, this);
+        redeemEventTarget.on('redeem', this.onRedeem, this);
+        betAmountEventTarget.on('betAmount', this.onBetAmount, this);
+    }
+
+    start(): void {  
         this.uiController = this.node.getComponent(UIController);
+        this.rocket = this.rocketParent.getComponent(Rocket);
+        this.setGameStage(GameStage.INITIALIZING);
     }
 
-    start(): void {
-        this.startFadeAnimations();
-        this.startVibrationEffect();
-        this.uiController.rocketLaunch();
+    private onIsLaunchingChanged(isLaunching: boolean): void {
+        console.log('isLaunching changed:', isLaunching);
     }
 
-    fadeInOut(node: Node, duration: number): void {
-        const uiOpacity = node.getComponent(UIOpacity);
-        if (uiOpacity) {
-            tween(uiOpacity)
-                .repeatForever(
-                    tween()
-                        .to(duration, { opacity: 255 }, { easing: "sineInOut" })
-                        .to(duration, { opacity: 0 }, { easing: "sineInOut" })
-                )
-                .start();
-        } else {
-            console.warn("Node does not have a UIOpacity component:", node);
+    private onIsDepartingChanged(isDeparting: boolean): void {
+        console.log('isDeparting changed:', isDeparting);
+    }
+
+    private onCountdownIsOne(): void {
+        console.log('Countdown reached 1');
+        // Add your logic here to handle the countdown reaching 2
+        this.rocket.startDepartingUp();
+    }
+
+    private onExploded(): void {
+        console.log('Exploded');
+        this.setGameStage(GameStage.EXPLODING);
+        this.rocket.startExplodeAction();
+        this.uiController.zoomInExplodeLBL();
+
+        setTimeout(() => {
+            this.setGameStage(GameStage.INITIALIZING);
+        }, 3000);
+    }
+
+    private onDepartingFinished(isFinished: boolean): void {
+        console.log('Departing finished');
+        if (isFinished) {
+            this.setGameStage(GameStage.IN_FLIGHT);
         }
     }
 
-    startFadeAnimations(): void {
-        if (this.light1 && this.light2 && this.flare) {
-            this.fadeInOut(this.light1, 0.3); // 0.5 seconds for each fade in/out
-            this.fadeInOut(this.light2, 0.3);
-            this.fadeInOut(this.flare, 0.3);
-        } else {
-            console.error("One or more nodes are not initialized.");
+    private onIsFlying(isFlying: boolean): void {
+        if (isFlying) {
+            this.winningNum = this.generateWinningNumber();
+            this.storeWinningNumber(this.winningNum);
+            this.uiController.countUpToWinningNum(this.winningNum);
         }
     }
 
-    initialLaunchRocket(): void {
-        ///////////////////////////////////////////////////////////////////////////////////////////
-    }
-
-    vibrateRocket(node: Node, intensity: number, duration: number): void {
-        if (!node) {
-            console.error("Node is not initialized.");
-            return;
+    private storeWinningNumber(number: number): void {
+        if (this.winningNumbers.length >= 20) {
+            this.winningNumbers.shift(); // Remove the oldest number
         }
-
-        const initialPosition = node.getPosition().clone();
-        console.log("Starting vibration effect on node:", node.name);
-
-        tween(node)
-            .repeatForever(
-                tween()
-                    .by(duration, { position: new Vec3(intensity, 0, 0) }, { easing: "sineInOut" })
-                    .by(duration, { position: new Vec3(-intensity * 2, 0, 0) }, { easing: "sineInOut" })
-                    .by(duration, { position: new Vec3(intensity, 0, 0) }, { easing: "sineInOut" })
-                    .call(() => {
-                        // Reset to initial position after each cycle to prevent drifting
-                        node.setPosition(initialPosition);
-                    })
-            )
-            .start();
-
-        console.log("Vibration tween started.");
+        this.winningNumbers.push(number);
+        console.log('Winning numbers:', this.winningNumbers);
     }
 
-    startVibrationEffect(): void {
-        if (this.rocket) {
-            console.log("Rocket node is initialized:", this.rocket.name);
-            this.vibrateRocket(this.rocket, 0.2, 0.1); // Adjust intensity and duration as needed
-        } else {
-            console.error("Rocket node is not initialized.");
+    private onRedeem(redeem: boolean, winAmount: string): void {
+        if(redeem){
+            this.userRedeemAmount = parseFloat(winAmount);
+            this.uiController.zoomInWinningPanel(this.userRedeemAmount);
+            this.userWallet += (this.betAmount * this.userRedeemAmount);
+            this.uiController.updateUserWallet(this.userWallet.toString());
         }
     }
 
-    startDepartingUp() {
-        const departureOffset = 500; // Set how far up the UFO should move
-        const initialPosition = this.rocketParent.getPosition();
-        const targetPosition = new Vec3(initialPosition.x, initialPosition.y + departureOffset, initialPosition.z);
-
-        // Create the tween for the upward movement and scaling down to zero
-        tween(this.rocketParent)
-            .parallel(
-                tween()
-                    .call(() => {
-                        const smokeInstance = instantiate(this.smokeParticle);
-                        smokeInstance.setPosition(new Vec3(-25.653, -18.182, 0));
-                        this.particleParent.addChild(smokeInstance);
-
-                        const smokeInstance1 = instantiate(this.smokeParticle);
-                        smokeInstance1.setPosition(new Vec3(2.491, -17.684, 0));
-                        this.particleParent.addChild(smokeInstance1);
-                    })
-                    .to(2, { position: targetPosition }, { easing: "expoIn" }) // Move upwards to target position
-                ,
-                tween().to(2, { scale: new Vec3(0, 0, 0) }, { easing: "expoIn" })  // Shrink to zero size
-            )
-            .call(() => {
-                this.flare.active = false;
-                this.particleParent.children[1].destroy();
-                this.particleParent.children[2].destroy();
-            })
-            .start();
+    private onBetAmount(betAmount: string): void {
+        this.betAmount = parseFloat(betAmount);
+        this.userWallet -= this.betAmount;
+        this.uiController.updateUserWallet(this.userWallet.toString());
     }
+
+    private setGameStage(stage: GameStage): void {
+        this.currentStage = stage;
+        console.log('Game stage changed to:', GameStage[stage]);
+        
+        // Emit the stage change event
+        gameStageEventTarget.emit('stageChanged', stage);
+
+        // Handle logic for each stage
+        switch (stage) {
+            case GameStage.INITIALIZING:
+                this.initializeGame();
+                break;
+            case GameStage.READY:
+                this.prepareForLaunch();
+                break;
+            case GameStage.LAUNCHING:
+                this.launchRocket();
+                break;
+            case GameStage.IN_FLIGHT:
+                this.handleInFlight();
+                break;
+            case GameStage.EXPLODING:
+                this.handleExploding();
+                break;
+            case GameStage.COMPLETED:
+                this.completeGame();
+                break;
+        }
+    }
+
+    private initializeGame(): void {
+        // Logic for initializing the game
+        this.uiController.initialGameStageUI();
+        setTimeout(() => {
+            this.setGameStage(GameStage.LAUNCHING);
+        }, 1500);
+    }
+
+    private prepareForLaunch(): void {
+        // Logic for preparing the game for launch
+        //this.uiController.readyGameStageUI();
+    }
+
+    private launchRocket(): void {
+        // Logic for launching the rocket
+        this.uiController.launchingGameStageUI();
+    }
+
+    private handleInFlight(): void {
+        // Logic for handling in-flight stage
+        this.uiController.inFlightGameStageUI();
+        this.rocket.startFlyingAction();
+        
+    }
+
+    private handleExploding(): void {
+        // Logic for handling landing stage
+        this.uiController.showHistoryS_Panel(this.winningNum);
+    }
+
+    private completeGame(): void {
+        // Logic for completing the game
+    }
+    
+    generateWinningNumber(): number {
+        let min = 1;
+        let max = 2;
+        return parseFloat((Math.random() * (max - min) + min).toFixed(2));
+    }
+
+    get winningNum(): number {
+        return this._winningNum;
+    }
+
+    set winningNum(value: number) {
+        this._winningNum = value;
+        console.log('Winning number set to:', value);
+    }
+
+    get userWallet(): number {
+        return this._userWallet;
+    }
+
+    set userWallet(value: number) {
+        this._userWallet = value;
+        console.log('User wallet set to:', value);
+    }
+
+    get betAmount(): number {
+        return this._betAmount;
+    }
+
+    set betAmount(value: number) {
+        this._betAmount = value;
+        console.log('Bet amount set to:', value);
+    }
+
+    get winningNumbers(): number[] {
+        return this._winningNumbers;
+    }
+
+    set winningNumbers(numbers: number[]) {
+        this._winningNumbers = numbers;
+        console.log('Winning numbers set to:', numbers);
+    }
+
 }
 
-
+export { gameStageEventTarget };
