@@ -1,4 +1,4 @@
-import { _decorator, Button, Component, Label, Node, ScrollView, tween, UIOpacity, v3, Vec3, EventTarget, SpriteFrame, Sprite, Prefab, instantiate } from 'cc';
+import { _decorator, Button, Component, Label, Node, ScrollView, tween, UIOpacity, v3, Vec3, EventTarget, SpriteFrame, Sprite, Prefab, instantiate, Tween } from 'cc';
 import { GameController } from './GameController';
 import { Rocket } from './Model/Rocket';
 import { GameStage } from './GameStages';
@@ -100,14 +100,11 @@ export class UIController extends Component {
     @property(Node)
     private historyS_ItemParent: Node = null;
 
+    @property(Node)
+    private starNode: Node = null;
+
     @property(Sprite)
     private bgSprite: Sprite = null;
-
-    @property(SpriteFrame)
-    private bgInitialSpriteFrame: SpriteFrame = null;
-
-    @property(SpriteFrame)
-    private bgFlightSpriteFrame: SpriteFrame = null;
 
     @property(Prefab)
     private historyItemPrefab: Prefab = null;
@@ -116,6 +113,8 @@ export class UIController extends Component {
     private historyS_ItemPrefab: Prefab = null;
 
     private gameController: GameController = null;
+
+    private bgTween: Tween<Node> = null;
 
     protected onLoad(): void {
         this.btnCopyID.node.on(Button.EventType.CLICK, () => this.copyAction(this.lblID), this);
@@ -257,6 +256,37 @@ export class UIController extends Component {
             .start();
     }
 
+    fadeInOut(node: Node, duration: number): void {
+        const uiOpacity = node.getComponent(UIOpacity);
+        if (uiOpacity) {
+            tween(uiOpacity)
+                .repeatForever(
+                    tween()
+                        .to(duration, { opacity: 255 }, { easing: "sineInOut" })
+                        .to(duration, { opacity: 0 }, { easing: "sineInOut" })
+                )
+                .start();
+        } else {
+            console.warn("Node does not have a UIOpacity component:", node);
+        }
+    }
+
+    bgAnimation(): void {
+        this.bgTween = tween(this.bgSprite.node)
+            .to(60, { position: v3(0, -356.549, 0) })
+            .call(() => {
+                this.stopBgAnimation();
+            })
+            .start();
+    }
+
+    stopBgAnimation(): void {
+        if (this.bgTween) {
+            this.bgTween.stop();
+            this.bgTween = null; // Optionally clear the reference
+        }
+    }
+
     showHistoryS_Panel(winNum: number): void {
         this.historyS_Panel.getComponent(ScrollView).scrollToRight();
         if (this.historyS_ItemParent.children.length >= 20) {
@@ -303,10 +333,10 @@ export class UIController extends Component {
         this.bottomUI.active = true;
         this.commonUI.active = true;
         this.rocketParent.active = true;
-
         this.counterPanel.active = true;
         this.lblCountdown.string = "6";
-        this.bgSprite.spriteFrame = this.bgInitialSpriteFrame;
+        this.stopBgAnimation();
+        this.bgSprite.node.setPosition(0, 671.973);
     }
 
     launchingGameStageUI(): void{
@@ -314,11 +344,10 @@ export class UIController extends Component {
     }
 
     inFlightGameStageUI(): void{
-        this.flareNode.active = true;
-        this.rocketParent.children[0].children[1].destroy();
-        this.rocketParent.children[0].children[2].destroy();
         this.counterPanel.active = false;
-        this.bgSprite.spriteFrame = this.bgFlightSpriteFrame;
+        this.fadeInOut(this.starNode, 0.5);
+        this.bgSprite.node.setPosition(0, 450);
+        this.bgAnimation();
         this.multipierPanel.active = true;
         this.lblWinningNum.string = "1.00X";
     }

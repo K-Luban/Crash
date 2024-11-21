@@ -1,4 +1,4 @@
-import { _decorator, Component, instantiate, Node, Prefab, tween, UIOpacity, Vec3, EventTarget } from 'cc';
+import { _decorator, Component, instantiate, Node, Prefab, tween, UIOpacity, Vec3, EventTarget, Animation, Quat, UITransform, Size, Sprite, SpriteFrame } from 'cc';
 const { ccclass, property } = _decorator;
 
 const rocketEventTarget = new EventTarget();
@@ -13,12 +13,6 @@ export class Rocket extends Component {
     rocketNode: Node = null;
 
     @property(Node)
-    light1: Node = null;
-
-    @property(Node)
-    light2: Node = null;
-
-    @property(Node)
     flare: Node = null;
 
     @property(Node)
@@ -27,21 +21,27 @@ export class Rocket extends Component {
     @property(Node)
     particleParent: Node = null;
 
+    @property(Node)
+    fireNode: Node = null;
+
     @property(Prefab)
     smokeParticle: Prefab = null;
 
     @property(Prefab)
     explodeParticle: Prefab = null;
 
+    @property(SpriteFrame)
+    rocketDefaultSprite: SpriteFrame = null;
+
+    rocketAnim: Animation = null;
     private _isLaunching: boolean = false;
     private _isDeparting: boolean = false;
     private _vibrationTween: any = null;
+    private _floatingTween: any = null;
 
     protected start(): void {
         this.startVibrationEffect();
-        //this.startFloatingAction();
-        //this.startFlyingAction();
-        //this.startDepartingUp();
+        this.rocketAnim = this.rocket.getComponent(Animation);
     }
 
     fadeInOut(node: Node, duration: number): void {
@@ -60,10 +60,8 @@ export class Rocket extends Component {
     }
 
     startFadeAnimations(): void {
-        if (this.light1 && this.light2 && this.flare) {
-            this.fadeInOut(this.light1, 0.3); // 0.5 seconds for each fade in/out
-            this.fadeInOut(this.light2, 0.3);
-            this.fadeInOut(this.flare, 0.3);
+        if (this.flare) {
+            this.fadeInOut(this.flare, 0.5);
         } else {
             console.error("One or more nodes are not initialized.");
         }
@@ -77,6 +75,9 @@ export class Rocket extends Component {
 
         const initialPosition = node.getPosition().clone();
         console.log("Starting vibration effect on node:", node.name);
+
+        this.flare.active = true;
+        this.startFadeAnimations();
 
         this._vibrationTween = tween(node)
             .repeatForever(
@@ -106,40 +107,42 @@ export class Rocket extends Component {
     startVibrationEffect(): void {
         if (this.rocket) {
             console.log("Rocket node is initialized:", this.rocket.name);
-            this.vibrateRocket(this.rocket, 0.2, 0.1); // Adjust intensity and duration as needed
+            this.vibrateRocket(this.rocket, 0.1, 0.1); // Adjust intensity and duration as needed
         } else {
             console.error("Rocket node is not initialized.");
         }
     }
 
     startDepartingUp() {
+        this.fireNode.active = true;
+        this.fireNode.setScale(1, 2);
+        this.fireNode.getComponent(Animation).play();
         const departureOffset = 500; // Set how far up the UFO should move
         const initialPosition = this.node.getPosition();
         const targetPosition = new Vec3(initialPosition.x, initialPosition.y + departureOffset, initialPosition.z);
 
-        // Create the tween for the upward movement and scaling down to zero
+        // Create the tween for the upward movement
         tween(this.rocketNode)
-            .parallel(
-                tween()
-                    .call(() => {
-                        const smokeInstance = instantiate(this.smokeParticle);
-                        smokeInstance.setPosition(new Vec3(-25.653, -18.182, 0));
-                        this.particleParent.addChild(smokeInstance);
-
-                        const smokeInstance1 = instantiate(this.smokeParticle);
-                        smokeInstance1.setPosition(new Vec3(2.491, -17.684, 0));
-                        this.particleParent.addChild(smokeInstance1);
-                    })
-                    .to(2, { position: targetPosition }, { easing: "expoIn" }) // Move upwards to target position
-                ,
-                tween().to(2, { scale: new Vec3(0, 0, 0) }, { easing: "expoIn" })  // Shrink to zero size
-            )
             .call(() => {
+                // Instantiate and position the smoke particles
+                const smokeInstance = instantiate(this.smokeParticle);
+                smokeInstance.setPosition(new Vec3(-25.653, -18.182, 0));
+                this.particleParent.addChild(smokeInstance);
+
+                const smokeInstance1 = instantiate(this.smokeParticle);
+                smokeInstance1.setPosition(new Vec3(2.491, -17.684, 0));
+                this.particleParent.addChild(smokeInstance1);
+            })
+            .to(2, { position: targetPosition }, { easing: "expoIn" }) // Move upwards to target position
+            .call(() => {
+                // Disable flare and destroy smoke particles
                 this.flare.active = false;
                 this.particleParent.children[1].destroy();
                 this.particleParent.children[2].destroy();
-                rocketEventTarget.emit('departingFinished',true);
+                // Emit event and stop vibration effect
+                rocketEventTarget.emit('departingFinished', true);
                 this.stopVibrationEffect();
+                console.log(this.rocketNode.getComponent(UITransform).contentSize+'---------------'+this.rocketNode.getScale());
             })
             .start();
     }
@@ -152,7 +155,7 @@ export class Rocket extends Component {
 
         console.log("Starting floating action tween");
         if (this.rocketNode) {
-            tween(this.rocketNode)
+            this._floatingTween = tween(this.rocketNode)
                 .repeatForever(
                     tween()
                         .to(floatDuration, { position: new Vec3(originalPosition.x, originalPosition.y + floatHeight, originalPosition.z) }, { easing: 'sineInOut' })
@@ -160,39 +163,69 @@ export class Rocket extends Component {
                 )
                 .start();
             console.log("Floating action tween started");
-            this.fadeInOut(this.light1, 0.8);
-            this.fadeInOut(this.light2, 0.5);
         } else {
             console.error("rocketNode is not initialized.");
         }
     }
 
+    stopFloatingAction() {
+        if (this._floatingTween) {
+            this._floatingTween.stop();
+            this._floatingTween = null;
+            console.log("Floating action tween stopped");
+        } else {
+            console.warn("No floating action tween to stop.");
+        }
+    }
+
     startFlyingAction() {
         this.rocketNode.active = true;
-        this.rocketNode.setPosition(-50, -200);
-        this.rocketNode.setScale(0, 0);
+        this.rocketNode.setPosition(-400, -180);
+        this.rocketNode.setRotationFromEuler(0, 0, -80); // Initial rotation
+        this.rocketNode.setScale(1, 1, 1);
+    
+        this.fireNode.active = true;
+        this.fireNode.getComponent(Animation).play();
+    
+        console.log("Rocket Content Size:", this.rocketNode.getComponent(UITransform).contentSize);
+        console.log("Rocket Scale:", this.rocketNode.getScale());
+    
         tween(this.rocketNode)
-            .parallel(
-                tween().to(1, { position: new Vec3(0, 0) }, { easing: "expoIn" }),
-                tween().to(1, { scale: new Vec3(1, 1) }, { easing: "expoIn" })
-            )
+            .to(1, { 
+                position: new Vec3(100, 0),
+                rotation: Quat.fromEuler(new Quat(), 0, 0, -45) // Use static method Quat.fromEuler
+            }, { easing: "expoIn" })
             .call(() => {
-                rocketEventTarget.emit('isFlying',true);
+                rocketEventTarget.emit('isFlying', true);
                 this.startFloatingAction();
+                this.rocketAnim.play();
+                console.log("Rocket Content Size After Tween:", this.rocketNode.getComponent(UITransform).contentSize);
+                console.log("Rocket Scale After Tween:", this.rocketNode.getScale());
             })
             .start();
-        
     }
+    
 
     startExplodeAction(): void {
         const explodeInstance = instantiate(this.explodeParticle);
         explodeInstance.setPosition(this.rocketNode.position);
         this.node.addChild(explodeInstance);
 
-        setTimeout(() => {
-            explodeInstance.destroy();
-            this.node.active = false;
-        }, 800);
+        const animation = explodeInstance.getComponent(Animation);
+        if (animation) {
+            animation.play();
+            animation.on(Animation.EventType.FINISHED, () => {
+                this.node.active = false;
+                explodeInstance.destroy();
+                this.rocketAnim.stop();
+                this.node.active = false;
+                this.rocketNode.setPosition(new Vec3(8.951, -0.557));
+                this.rocketNode.setRotationFromEuler(0, 0, 0);
+                this.fireNode.active = false;
+                this.stopFloatingAction();
+                this.rocket.getComponent(Sprite).spriteFrame = this.rocketDefaultSprite;
+            }, this);
+        }
     }
 
     get isLaunching(): boolean {

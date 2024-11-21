@@ -143,6 +143,8 @@ export class GameController extends Component {
     private initializeGame(): void {
         // Logic for initializing the game
         this.uiController.initialGameStageUI();
+        this.rocket.node.active = true;
+        this.rocket.startVibrationEffect();
         setTimeout(() => {
             this.setGameStage(GameStage.LAUNCHING);
         }, 1500);
@@ -162,7 +164,6 @@ export class GameController extends Component {
         // Logic for handling in-flight stage
         this.uiController.inFlightGameStageUI();
         this.rocket.startFlyingAction();
-        
     }
 
     private handleExploding(): void {
@@ -215,6 +216,7 @@ export class GameController extends Component {
         this._winningNumbers = numbers;
         console.log('Winning numbers set to:', numbers);
     }
+
 
 }
 
