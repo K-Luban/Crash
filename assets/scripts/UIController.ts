@@ -287,6 +287,15 @@ export class UIController extends Component {
         }
     }
 
+    scaleUp(node: Node, scale: Vec3, duration: number): void {
+        tween(node)
+            .to(duration, { scale: scale })
+            .call(() => {
+                node.active = false;
+            })
+            .start();
+    }
+
     showHistoryS_Panel(winNum: number): void {
         this.historyS_Panel.getComponent(ScrollView).scrollToRight();
         if (this.historyS_ItemParent.children.length >= 20) {

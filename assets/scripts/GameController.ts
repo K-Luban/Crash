@@ -59,6 +59,7 @@ export class GameController extends Component {
         console.log('Countdown reached 1');
         // Add your logic here to handle the countdown reaching 2
         this.rocket.startDepartingUp();
+        this.uiController.scaleUp(this.rocket.fireNode, new Vec3(1, 5), 2);
     }
 
     private onExploded(): void {

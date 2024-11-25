@@ -24,6 +24,9 @@ export class Rocket extends Component {
     @property(Node)
     fireNode: Node = null;
 
+    @property(Node)
+    fireFlyNode: Node = null;
+
     @property(Prefab)
     smokeParticle: Prefab = null;
 
@@ -115,7 +118,8 @@ export class Rocket extends Component {
 
     startDepartingUp() {
         this.fireNode.active = true;
-        this.fireNode.setScale(1, 2);
+        this.fireNode.setScale(1,0);
+        this.fireFlyNode.active = false;
         this.fireNode.getComponent(Animation).play();
         const departureOffset = 500; // Set how far up the UFO should move
         const initialPosition = this.node.getPosition();
@@ -124,7 +128,6 @@ export class Rocket extends Component {
         // Create the tween for the upward movement
         tween(this.rocketNode)
             .call(() => {
-                // Instantiate and position the smoke particles
                 const smokeInstance = instantiate(this.smokeParticle);
                 smokeInstance.setPosition(new Vec3(-25.653, -18.182, 0));
                 this.particleParent.addChild(smokeInstance);
@@ -133,16 +136,14 @@ export class Rocket extends Component {
                 smokeInstance1.setPosition(new Vec3(2.491, -17.684, 0));
                 this.particleParent.addChild(smokeInstance1);
             })
-            .to(2, { position: targetPosition }, { easing: "expoIn" }) // Move upwards to target position
+            .to(2, { position: targetPosition }, { easing: "expoIn" })
             .call(() => {
-                // Disable flare and destroy smoke particles
                 this.flare.active = false;
                 this.particleParent.children[1].destroy();
                 this.particleParent.children[2].destroy();
-                // Emit event and stop vibration effect
                 rocketEventTarget.emit('departingFinished', true);
                 this.stopVibrationEffect();
-                console.log(this.rocketNode.getComponent(UITransform).contentSize+'---------------'+this.rocketNode.getScale());
+                this.fireNode.active = false;
             })
             .start();
     }
@@ -184,8 +185,8 @@ export class Rocket extends Component {
         this.rocketNode.setRotationFromEuler(0, 0, -80); // Initial rotation
         this.rocketNode.setScale(1, 1, 1);
     
-        this.fireNode.active = true;
-        this.fireNode.getComponent(Animation).play();
+        this.fireFlyNode.active = true;
+        this.fireFlyNode.getComponent(Animation).play();
     
         console.log("Rocket Content Size:", this.rocketNode.getComponent(UITransform).contentSize);
         console.log("Rocket Scale:", this.rocketNode.getScale());
@@ -193,20 +194,19 @@ export class Rocket extends Component {
         tween(this.rocketNode)
             .to(1, { 
                 position: new Vec3(100, 0),
-                rotation: Quat.fromEuler(new Quat(), 0, 0, -45) // Use static method Quat.fromEuler
+                rotation: Quat.fromEuler(new Quat(), 0, 0, -30) // Use static method Quat.fromEuler
             }, { easing: "expoIn" })
             .call(() => {
                 rocketEventTarget.emit('isFlying', true);
                 this.startFloatingAction();
                 this.rocketAnim.play();
-                console.log("Rocket Content Size After Tween:", this.rocketNode.getComponent(UITransform).contentSize);
-                console.log("Rocket Scale After Tween:", this.rocketNode.getScale());
             })
             .start();
     }
     
 
     startExplodeAction(): void {
+        this.fireFlyNode.active = false;
         const explodeInstance = instantiate(this.explodeParticle);
         explodeInstance.setPosition(this.rocketNode.position);
         this.node.addChild(explodeInstance);

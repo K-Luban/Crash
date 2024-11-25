@@ -42,6 +42,9 @@ export class BetButtonControl extends Component {
     @property(Node)
     private betAmountBtnParent: Node = null;
 
+    @property(Node)
+    private autoBetBtnParent: Node = null;
+
     @property(Layout)
     private manualAutoBtnLayout: Layout = null;
 
@@ -77,7 +80,9 @@ export class BetButtonControl extends Component {
 
     currentStage: GameStage = null;
 
-    private winAmount: number = 1.00;
+    private autoRedeemAmt: number = 0;
+
+    private autoBetCounter: number = 0;
 
     private isRedeemable: boolean = false;
 
@@ -165,7 +170,44 @@ export class BetButtonControl extends Component {
         if(this.autoBetPanel.active) {
             this.autoBetPanel.active = false;
         } else {
-            this.autoBetPanel.active = true;
+            if(this.btnAutoBet.node.children[0].getComponent(Label).string == "自动投注"){
+                this.autoBetPanel.active = true;
+                for(let i = 0; i < this.autoBetBtnParent.children.length; i++) {
+                    let btn = this.autoBetBtnParent.children[i].getComponent(Button);
+                    btn.node.on(Button.EventType.CLICK, () => this.autoBetBtnClicked(i), this);
+                }
+            }else{
+                this.btnAutoBet.node.children[0].getComponent(Label).string = "自动投注"
+                this.btnBet.node.getComponent(Sprite).spriteFrame = this.sprBet_Betting;
+                this.lblBet.string = "投注";
+                this.lblBet.node.position = new Vec3(0, 0);
+                this.lblWinAmount.node.active = false;
+                this.setBetBtnGroupInteractable(true);
+            }
+        }
+    }
+
+    autoBetBtnClicked(index: number): void {
+        if(this.currentStage == 2){
+            if(index == 0){
+                this.btnAutoBet.node.children[0].getComponent(Label).string = "取消自动(∞)";
+            }else if(index == 1){
+                this.btnAutoBet.node.children[0].getComponent(Label).string = "取消自动(1000)";
+            }else if(index == 2){
+                this.btnAutoBet.node.children[0].getComponent(Label).string = "取消自动(100)";
+            }else if(index == 3){
+                this.btnAutoBet.node.children[0].getComponent(Label).string = "取消自动(50)";
+            }else if(index == 4){
+                this.btnAutoBet.node.children[0].getComponent(Label).string = "取消自动(30)";
+            }else if(index == 5){
+                this.btnAutoBet.node.children[0].getComponent(Label).string = "取消自动(10)";
+            }
+            this.btnBet.node.getComponent(Sprite).spriteFrame = this.sprBet_Cancel;
+            this.lblBet.string = "撤销";
+            this.setBetBtnGroupInteractable(false);
+            betAmountEventTarget.emit('betAmount', this.editBetAmt.string);
+            this.autoRedeemValue();
+            this.autoBetPanel.active = false;
         }
     }
 
@@ -197,6 +239,7 @@ export class BetButtonControl extends Component {
                 this.lblBet.string = "撤销";
                 this.setBetBtnGroupInteractable(false);
                 betAmountEventTarget.emit('betAmount', this.editBetAmt.string);
+                this.autoRedeemValue();
             }else{
                 this.btnBet.node.getComponent(Sprite).spriteFrame = this.sprBet_Betting;
                 this.lblBet.string = "投注";
@@ -221,13 +264,7 @@ export class BetButtonControl extends Component {
                 this.setBetBtnGroupInteractable(true);
             }else if(this.btnBet.node.getComponent(Sprite).spriteFrame.name == this.sprBet_Redeem.name){
                 if(this.isRedeemable){
-                    this.btnBet.node.getComponent(Sprite).spriteFrame = this.sprBet_Betting;
-                    this.lblBet.string = "投注";
-                    this.lblBet.node.position = new Vec3(0, 0);
-                    this.lblWinAmount.node.active = false;
-                    this.setBetBtnGroupInteractable(true);
-                    this.isRedeemable = false;
-                    redeemEventTarget.emit('redeem', true, this.lblWinAmount.string);
+                    this.redeem();
                 }
             }
         }
@@ -262,6 +299,11 @@ export class BetButtonControl extends Component {
     private onWinningNumChanged(winningNum: number): void {
         if(this.isWait == false){
             this.lblWinAmount.string = winningNum.toString();
+            if(this.autoBetPanel.active){
+                if(this.autoRedeemAmt <= winningNum){
+                    this.redeem();
+                }
+            }
         }
     }
 
@@ -274,11 +316,31 @@ export class BetButtonControl extends Component {
         this.btnAuto.interactable = interactable;
         this.btnPlusBet.interactable = interactable;
         this.btnMinusBet.interactable = interactable;
-        this.btnAutoBet.interactable = interactable;
         this.btnHalf.interactable = interactable;
         this.btn2x.interactable = interactable;
         this.editBetAmt.enabled = interactable;
         this.editAutoBet.enabled = interactable;
+    }
+
+    autoRedeemValue(): void {
+        if(this.autoBetPanel.active){
+            let autoRedeem = this.editAutoBet.string;
+            let currentMultiplier = 0;
+            if (autoRedeem) {
+                currentMultiplier = parseFloat(autoRedeem.replace("X", ""));
+            }
+            this.autoRedeemAmt = currentMultiplier;
+        }
+    }
+
+    redeem(): void {
+        this.btnBet.node.getComponent(Sprite).spriteFrame = this.sprBet_Betting;
+        this.lblBet.string = "投注";
+        this.lblBet.node.position = new Vec3(0, 0);
+        this.lblWinAmount.node.active = false;
+        this.setBetBtnGroupInteractable(true);
+        this.isRedeemable = false;
+        redeemEventTarget.emit('redeem', true, this.lblWinAmount.string);
     }
 
 }
